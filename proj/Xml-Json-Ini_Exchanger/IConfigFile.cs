@@ -37,6 +37,10 @@ namespace ArmyAnt
             if(filename != null)
                 LoadFile(filename);
         }
+        public AConfigFile(AConfigFile value)
+        {
+            root = value.root;
+        }
         public static AConfigFile CreateConfig(string filename, EConfigType type)
         {
             switch(type)
@@ -58,7 +62,7 @@ namespace ArmyAnt
             var f = File.OpenText(filename);
             var data = f.ReadToEnd();
             f.Close();
-            return LoadString(data);
+            return LoadString(data.Replace("\r", ""));
         }
         public abstract bool LoadString(string text);
         override public abstract string ToString();
@@ -69,6 +73,7 @@ namespace ArmyAnt
 
                 var f = File.OpenWrite(filename);
                 var str = Encoding.UTF8.GetBytes(ToString());
+                f.SetLength(0);
                 f.Write(str, 0, str.Length);
                 f.Close();
             }
@@ -165,11 +170,10 @@ namespace ArmyAnt
                     break;
                 case EConfigType.Json:
                     {
-                        var ret = JsonFile.JsonToElement(text);
-                        if(ret == null)
+                        children.Clear();
+                        AddChild(JsonFile.JsonToElement(text));
+                        if(children.Count <= 0)
                             throw new Exception("Error format in this json file");
-                        children = ret.children;
-                        attributes = ret.attributes;
                     }
                     break;
                 case EConfigType.Xml:
@@ -260,11 +264,15 @@ namespace ArmyAnt
                     }
                     break;
                 case EConfigType.Json:
+                    ret += "\t";
                     if(attributes.Count > 0)
                     {
                         ret += '{';
                         for(int i = 0; i < attributes.Count; i++)
-                            ret += "\"" + attributes[i].key + "\":" + (attributes[i].value == null ? "null" : ("\"" + attributes[i].value + "\"")) + ";";
+                        {
+                            ret += '"';
+                            ret += attributes[i].key + '"' + ":" + (attributes[i].value == null ? "null" : ('"' + attributes[i].value + '"')) + ",";
+                        }
                         ret = ret.Remove(ret.Length - 1);
                     }
                     else if(children.Count > 0)
@@ -276,9 +284,9 @@ namespace ArmyAnt
                         for(int i = 0; i < children.Count; i++)
                         {
                             if(attributes.Count > 0)
-                                ret += "\"" + i + "\":" + (children[i] == null ? "null" : ("\"" + children[i].GetText(EConfigType.Json) + "\"")) + ";";
+                                ret += '"' + i + '"' + ":" + (children[i] == null ? "null" : ('"' + children[i].GetText(EConfigType.Json) + '"')) + ",";
                             else
-                                ret += (children[i] == null ? "null" : ("\"" + children[i].GetText(EConfigType.Json) + "\"")) + ",";
+                                ret += (children[i] == null ? "null" : ('"' + children[i].GetText(EConfigType.Json) + '"')) + ",";
                         }
                         ret = ret.Remove(ret.Length - 1);
                     }
@@ -291,7 +299,7 @@ namespace ArmyAnt
                         ret += "]";
                     }
                     else
-                        ret = "null";
+                        ret += "null";
                     break;
                 case EConfigType.Xml:
                     break;
@@ -331,13 +339,15 @@ namespace ArmyAnt
                     ret[j] += src[i];
                 else if(ret[j] == "" && src[i] == ' ')
                     continue;
-                else
-                {
+                else if(ret[j] != "")
+                {                    
                     j++;
                     ret.Insert(j, "");
                 }
 
             }
+            if(ret[ret.Count - 1] == "")
+                ret.Remove("");
             return ret.ToArray();
         }
     }

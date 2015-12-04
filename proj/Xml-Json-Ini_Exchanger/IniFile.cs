@@ -8,6 +8,9 @@ namespace ArmyAnt
         public IniFile(string filename = null) : base(filename)
         {
         }
+        public IniFile(AConfigFile value) : base(value)
+        {
+        }
         override public bool LoadString(string text)
         {
             var codes = ConfigAttribute.CutToLines(text);
@@ -35,7 +38,8 @@ namespace ArmyAnt
             string ret = "";
             for(int i = 0; root != null && i < root.Length; i++)
             {
-                ret += '[' + root[i]["name"].value + "]\n";
+                var name = root[i]["name"];
+                ret += '[' + (name == null ? i.ToString() : name.value) + "]\n";
                 for(int j = 0; j < root[i].Attributes.Length; j++)
                 {
                     if(root[i].Attributes[j].key != "name")

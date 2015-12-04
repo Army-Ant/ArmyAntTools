@@ -10,10 +10,10 @@
     }
     public class ConfigFile
     {
-        ConfigFile()
+        public ConfigFile()
         {
         }
-        bool LoadFile(string filename,EConfigType type)
+        public bool LoadFile(string filename,EConfigType type)
         {
             switch(type)
             {
@@ -21,13 +21,13 @@
                     file = new IniFile();
                     break;
                 case EConfigType.Xml:
-                    file = new IniFile();
+                    file = new XmlFile();
                     break;
                 case EConfigType.Json:
-                    file = new IniFile();
+                    file = new JsonFile();
                     break;
                 case EConfigType.Sql:
-                    file = new IniFile();
+                    //file = new IniFile();
                     break;
                 default:
                     return false;
@@ -39,24 +39,27 @@
             this.type = EConfigType.Null;
             return false;
         }
-        bool SaveFile(string filename, EConfigType type)
+        public bool SaveFile(string filename, EConfigType type)
         {
             switch(type)
             {
                 case EConfigType.Ini:
+                    return new IniFile((AConfigFile)file).ToFile(filename);
                 case EConfigType.Xml:
+                    return new XmlFile((AConfigFile)file).ToFile(filename);
                 case EConfigType.Json:
+                    return new JsonFile((AConfigFile)file).ToFile(filename);
                 case EConfigType.Sql:
-                    return file.ToFile(filename);
+                    return new IniFile((AConfigFile)file).ToFile(filename);
             }
             return false;
         }
-        bool Load(IConfigFile cfg)
+        public bool Load(IConfigFile cfg)
         {
             file = cfg;
             return file != null;
         }
-        string Text
+        public string Text
         {
             get
             {
@@ -70,7 +73,7 @@
                     file.Text = value;
             }
         }
-        EConfigType Type
+        public EConfigType Type
         {
             get
             {

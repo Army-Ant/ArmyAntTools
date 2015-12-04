@@ -1,5 +1,5 @@
+using System.Collections.Generic;
 using System.IO;
-using Newtonsoft.Json;
 
 namespace ArmyAnt
 {
@@ -8,191 +8,230 @@ namespace ArmyAnt
         public JsonFile(string filename = null) : base(filename)
         {
         }
+        public JsonFile(AConfigFile value) : base(value)
+        {
+        }
+
         override public bool LoadString(string text)
         {
-            root = new ConfigElement[1];
-            root[0] = JsonToElement(text);
-            return root != null;
+            var ret = JsonToElement(text);
+            if(ret == null)
+                return false;
+            else if(ret.Children.Length <= 0)
+                root = new ConfigElement[] { ret };
+            else
+                root = ret.Children;
+            return true;
         }
         override public string ToString()
         {
-            var str = new StringWriter();
-            var jsonWriter = new JsonTextWriter(str);
-
-            jsonWriter.WriteStartArray();
+            string str = "[\n";
+            
             for(int i = 0; root != null && i < root.Length; i++)
             {
-                jsonWriter.WriteValue(root[i].GetText(EConfigType.Json));
+                str += root[i].GetText(EConfigType.Json) + "\n";
             }
-            jsonWriter.WriteEndArray();
-            return str.GetStringBuilder().ToString();
+            str += "]";
+            return str;
         }
         internal enum RootType : byte
         {
             Unsolved,
+            Value,
             Object,
             Array,
             Constructor,
-            Value
         }
 
         public static ConfigElement JsonToElement(string text)
         {
-            var jsonReader = new JsonTextReader(new StringReader(text));
-            ConfigElement single = new ConfigElement("", null);
-            string end = jsonReader.ReadAsString();
-            RootType innerType = RootType.Unsolved;
-            string innerValue = null;
-            string innerPropName = null;
-            string baseValue = null;
-            RootType type = RootType.Unsolved;
-            while(jsonReader.Read())
+            var ret = new ConfigElement("", null);
+            bool isJsonArray = false;
+            var strs = JsonCutStrings(text);
+            if(strs == null)
+                return null;
+            switch(strs[0])
             {
-                switch(jsonReader.TokenType)
+                case "[":
+                    if(strs[strs.Length - 1] != "]")
+                        return null;
+                    isJsonArray = true;
+                    break;
+                case "{":
+                    if(strs[strs.Length - 1] != "}")
+                        return null;
+                    isJsonArray = false;
+                    break;
+                default:
+                    return null;
+            }
+            string parser = "";
+            int depth = 0;
+            if(isJsonArray)
+            {
+                for(int i = 1; i < strs.Length - 1; i++)
                 {
-                    case JsonToken.Comment:
-                        continue;
-                    case JsonToken.StartArray:
-                        if(type == RootType.Unsolved)
-                            type = RootType.Array;
-                        else
+                    if(strs[i] == "[" || strs[i] == "{")
+                    {
+                        parser += strs[i];
+                        depth++;
+                    }
+                    else if(strs[i] == "]" || strs[i] == "}")
+                    {
+                        parser += strs[i];
+                        if(--depth == 0)
                         {
-                            innerType = RootType.Array;
-                            innerValue = "";
+                            ret.AddChild(JsonToElement(parser));
+                            parser = "";
                         }
-                        break;
-                    case JsonToken.StartConstructor:
-                        if(type == RootType.Unsolved)
-                            type = RootType.Constructor;
-                        else
-                        {
-                            innerType = RootType.Constructor;
-                            innerValue = "";
-                        }
-                        break;
-                    case JsonToken.StartObject:
-                        if(type == RootType.Unsolved)
-                            type = RootType.Object;
-                        else
-                        {
-                            innerType = RootType.Object;
-                            innerValue = "";
-                        }
-                        break;
-                    case JsonToken.EndArray:
-                        if(innerType != RootType.Array)
-                        {
-                            if(type != RootType.Array || jsonReader.Read())
-                                return null;
-                        }
-                        else
-                        {
-                            if(innerPropName == null && innerType == RootType.Array)
-                            {
-                                single.AddChild(JsonToElement(innerValue));
-                            }
-                            else if(innerPropName != null && innerType == RootType.Object)
-                            {
-                                single.AddAttribute(innerPropName, innerValue);
-                                innerPropName = null;
-                            }
-                            else
-                                return null;
-                        }
-                        innerValue = null;
-                        break;
-                    case JsonToken.EndConstructor:
-                        if(innerType != RootType.Constructor)
-                        {
-                            if(type != RootType.Constructor || jsonReader.Read())
-                                return null;
-                        }
-                        else
-                        {
+                        else if(depth < 0)
                             return null;
-                        }
-                        innerValue = null;
-                        break;
-                    case JsonToken.EndObject:
-                        if(innerType != RootType.Object)
-                        {
-                            if(type != RootType.Object || jsonReader.Read())
-                                return null;
-                        }
-                        else
-                        {
-                            if(innerPropName == null && innerType == RootType.Array)
-                            {
-                                single.AddChild(JsonToElement(innerValue));
-                            }
-                            else if(innerPropName != null && innerType == RootType.Object)
-                            {
-                                single.AddAttribute(innerPropName, innerValue);
-                                innerPropName = null;
-                            }
-                            else
-                                return null;
-                        }
-                        innerValue = null;
-                        break;
-                    case JsonToken.Null:
-                    case JsonToken.Undefined:
-                        if(innerPropName == null && innerType == RootType.Array)
-                        {
-                            single.AddChild((ConfigElement)null);
-                        }
-                        else if(innerPropName != null && innerType == RootType.Object)
-                        {
-                            single.AddAttribute(innerPropName, null);
-                            innerPropName = null;
-                        }
-                        else if(innerPropName != null && innerType == RootType.Value)
-                            baseValue = "";
-                        else
+                    }
+                    else if(depth > 0)
+                        parser += strs[i];
+                    else if(depth < 0)
+                        return null;
+                    else if(strs[i] == ":")
+                        return null;
+                    else if(strs[i] == ",")
+                    {
+                        if(parser == "")
                             return null;
-                        break;
-                    case JsonToken.PropertyName:
-                        if(type == RootType.Unsolved)
-                        {
-                            type = RootType.Value;
-                            baseValue = jsonReader.Value.ToString();
-                            single = new ConfigElement(null, null);
-                        }
-                        else if(innerType == RootType.Value)
+                        ret.AddChild(new ConfigElement(parser, null));
+                        parser = "";
+                    }
+                    else
+                        parser += strs[i];
+                }
+                if(depth > 0|| strs[strs.Length - 2] == ",")
+                    return null;
+                if(parser != "")
+                    ret.AddChild(new ConfigElement(parser, null));
+            }
+            else
+            {
+                string key = "";
+                for(int i = 1; i < strs.Length - 1; i++)
+                {
+                    if(key != "" && !((key[0] == '\'' && key[key.Length - 1] == '\'') || (key[0] == '"' && key[key.Length - 1] == '"')))
+                        return null;
+                    if(strs[i] == "[" || strs[i] == "{")
+                    {
+                        if(key == "")
                             return null;
-                        else if(innerPropName != null)
+                        parser += strs[i];
+                        depth++;
+                    }
+                    else if(strs[i] == "]" || strs[i] == "}")
+                    {
+                        parser += strs[i];
+                        if(--depth == 0)
+                        {
+                            ret.AddAttribute(key, parser);
+                            parser = "";
+                            key = "";
+                        }
+                        else if(depth < 0)
                             return null;
-                        else
-                        {
-                            innerPropName = jsonReader.Value.ToString();
-                        }
-                        break;
-                    default:
-                        if(type == RootType.Unsolved)
-                        {
-                            type = RootType.Value;
-                            baseValue = jsonReader.Value.ToString();
-                        }
-                        else if(type == RootType.Value)
-                        {
-                            if(single == null)
-                                return null;
-                            single.AddAttribute(baseValue, jsonReader.Value.ToString());
-                            if(jsonReader.Read())
-                                return null;
-                        }
-                        else
-                        {
-                            innerValue += jsonReader.Value.ToString();
-                        }
-                        break;
+                    }
+                    else if(depth > 0)
+                        parser += strs[i];
+                    else if(depth < 0)
+                        return null;
+                    else if(strs[i] == ":")
+                    {
+                        if(key != "")
+                            return null;
+                        key = strs[i];
+                    }
+                    else if(strs[i] == ",")
+                    {
+                        if(key == "")
+                            return null;
+                        ret.AddAttribute(key, parser);
+                        parser = "";
+                        key = "";
+                    }
+                    else
+                        parser += strs[i];
+                }
+                if(depth > 0 || strs[strs.Length - 2] == ",")
+                    return null;
+                if(key != "")
+                {
+                    if(parser != "")
+                        ret.AddAttribute(key, parser);
+                    else
+                        return null;
+                }
+                else if(parser != "")
+                    return null;
+            }
+
+            return ret;
+        }
+        public static string[] JsonCutStrings(string text)
+        {
+            var strs = new List<string>();
+            string tmp = "";
+            bool isSingleStringStart = false;
+            bool isDoubleStringStart = false;
+            char[] oper = { '{', '}', '[', ']', ':', ',' };
+            for(int i = 0; i < text.Length; i++)
+            {
+                if(isSingleStringStart)
+                {
+                    if(text[i] == '\'')
+                    {
+                        strs.Add(tmp + "'");
+                        tmp = "";
+                    }
+                    else
+                        tmp += text[i];
+                }
+                else if(isDoubleStringStart)
+                {
+                    if(text[i] == '"')
+                    {
+                        strs.Add(tmp + '"');
+                        tmp = "";
+                    }
+                    else
+                        tmp += text[i];
+                }
+                else if(text[i] == '\'')
+                {
+                    if(tmp != "")
+                        strs.Add(tmp);
+                    tmp = "'";
+                    isSingleStringStart = true;
+                }
+                else if(text[i] == '"')
+                {
+                    if(tmp != "")
+                        strs.Add(tmp);
+                    tmp = "\"";
+                    isDoubleStringStart = true;
+                }
+                else if(text[i] == ' ' || text[i] == '\r' || text[i] == '\n' || text[i] == '\t')
+                    continue;
+                else if(System.Array.IndexOf(oper, text[i]) < 0)
+                {
+                    tmp += text[i];
+                }
+                else
+                {
+                    if(tmp != "")
+                        strs.Add(tmp);
+                    tmp = "";
+                    strs.Add("" + text[i]);
                 }
             }
-            jsonReader.Close();
-            if(type == RootType.Unsolved)
+            if(isSingleStringStart || isDoubleStringStart)
                 return null;
-            else
-                return single;
+            if(tmp != "")
+                strs.Add(tmp);
+            return strs.ToArray();
         }
     }
 }

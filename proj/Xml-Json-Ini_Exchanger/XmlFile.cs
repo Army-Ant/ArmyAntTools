@@ -9,6 +9,10 @@ namespace ArmyAnt
         public XmlFile(string filename = null) : base(filename)
         {
         }
+        public XmlFile(AConfigFile value) : base(value)
+        {
+        }
+
         override public bool LoadString(string text)
         {
             XmlTextReader xmlReader = new XmlTextReader(new StringReader(text));
@@ -35,6 +39,8 @@ namespace ArmyAnt
             XmlTextReader reader = new XmlTextReader(new StringReader(text));
             ConfigElement ret = new ConfigElement("", null);
 
+
+            return ret;
         }
     }
 }
