@@ -5,35 +5,64 @@ namespace ArmyAnt
 {
     public class JsonFile : AConfigFile
     {
-        public JsonFile(string filename = null) : base(filename)
+		/// <summary>
+		/// 载入JSON配置文件
+		/// </summary>
+		/// <param name="filename">要载入的JSON配置文件</param>
+		public JsonFile(string filename = null) : base(filename)
         {
         }
-        public JsonFile(AConfigFile value) : base(value)
+		/// <summary>
+		/// 从另一个配置数据引用创建JSON格式配置数据对象
+		/// </summary>
+		/// <param name="value">要共享数据引用的另一个配置数据对象</param>
+		public JsonFile(AConfigFile value) : base(value)
         {
         }
-
-        override public bool LoadString(string text)
+		/// <summary>
+		/// 从JSON格式文本载入XML配置
+		/// <para><see cref="AConfigFile.LoadString(string)"/></para>
+		/// <para><see cref="IConfigFile.LoadString(string)"/></para>
+		/// </summary>
+		/// <param name="text">要载入的JSON格式文本</param>
+		/// <returns>成功返回<c>true</c></returns>
+		override public bool LoadString(string text)
         {
             var ret = JsonToElement(text);
             if(ret == null)
                 return false;
             else if(ret.Children.Length <= 0)
-                root = new ConfigElement[] { ret };
+            {
+                root = new ConfigElementCollection();
+                root.InsertElement(ret);
+            }
             else
-                root = ret.Children;
+            {
+                root = new ConfigElementCollection();
+                root.AddElements(ret.Children);
+            }
             return true;
         }
-        override public string ToString()
+		/// <summary>
+		/// 将配置数据转化为JSON格式文本
+		/// <para><see cref="AConfigFile.ToString()"/></para>
+		/// <para><see cref="IConfigFile.ToString()"/></para>
+		/// </summary>
+		/// <returns>转化后的JSON格式配置文本</returns>
+		override public string ToString()
         {
             string str = "[\n";
             
-            for(int i = 0; root != null && i < root.Length; i++)
+            for(int i = 0; root != null && i < root.Count; i++)
             {
                 str += root[i].GetText(EConfigType.Json) + "\n";
             }
             str += "]";
             return str;
         }
+		/// <summary>
+		/// 表示JSON格式对象的类型
+		/// </summary>
         internal enum RootType : byte
         {
             Unsolved,
@@ -42,7 +71,11 @@ namespace ArmyAnt
             Array,
             Constructor,
         }
-
+		/// <summary>
+		/// 将JSON格式文本转化为配置数据元素
+		/// </summary>
+		/// <param name="text">要转化的JSON格式文本</param>
+		/// <returns>返回转化后的配置数据元素</returns>
         public static ConfigElement JsonToElement(string text)
         {
             var ret = new ConfigElement("", null);
@@ -127,7 +160,7 @@ namespace ArmyAnt
                         parser += strs[i];
                         if(--depth == 0)
                         {
-                            ret.AddAttribute(key, parser);
+                            ToAddAttr(ret, key, parser);
                             parser = "";
                             key = "";
                         }
@@ -138,17 +171,21 @@ namespace ArmyAnt
                         parser += strs[i];
                     else if(depth < 0)
                         return null;
-                    else if(strs[i] == ":")
+                    else if(strs[i + 1] == ":")
                     {
                         if(key != "")
                             return null;
                         key = strs[i];
                     }
+                    else if(strs[i] == ":")
+                    {
+                        continue;
+                    }
                     else if(strs[i] == ",")
                     {
                         if(key == "")
                             return null;
-                        ret.AddAttribute(key, parser);
+                        ToAddAttr(ret, key, parser);
                         parser = "";
                         key = "";
                     }
@@ -160,7 +197,7 @@ namespace ArmyAnt
                 if(key != "")
                 {
                     if(parser != "")
-                        ret.AddAttribute(key, parser);
+                        ToAddAttr(ret, key, parser);
                     else
                         return null;
                 }
@@ -170,7 +207,32 @@ namespace ArmyAnt
 
             return ret;
         }
-        public static string[] JsonCutStrings(string text)
+		/// <summary>
+		/// 根据JSON文本内容进行属性添加，如果文本内容是个内嵌的数组或对象，则按照子节点进行解析，并添加到子节点集合中
+		/// </summary>
+		/// <param name="parent">要添加到的本(父)节点</param>
+		/// <param name="key">属性(节点)的名称</param>
+		/// <param name="value">值文本内容</param>
+		private static void ToAddAttr(ConfigElement parent, string key, string value)
+		{
+			if(value[0] == '[' || value[0] == '{')
+			{
+				var elem = new ConfigElement(value, EConfigType.Json);
+				elem.name = key;
+				key = key.Remove(key.Length - 1).Remove(0, 1);
+				parent.AddChild(elem);
+			}
+			else
+			{
+				parent.AddAttribute(key, value);
+			}
+		}
+		/// <summary>
+		/// 按照JSON格式对JSON文本进行符号解析
+		/// </summary>
+		/// <param name="text">要解析的JSON文本</param>
+		/// <returns>返回解析后的字段数组</returns>
+        private static string[] JsonCutStrings(string text)
         {
             var strs = new List<string>();
             string tmp = "";
@@ -185,6 +247,7 @@ namespace ArmyAnt
                     {
                         strs.Add(tmp + "'");
                         tmp = "";
+                        isSingleStringStart = false;
                     }
                     else
                         tmp += text[i];
@@ -195,6 +258,7 @@ namespace ArmyAnt
                     {
                         strs.Add(tmp + '"');
                         tmp = "";
+                        isDoubleStringStart = false;
                     }
                     else
                         tmp += text[i];

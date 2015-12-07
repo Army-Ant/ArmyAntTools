@@ -124,8 +124,10 @@ namespace ArmyAnt
             file = new ConfigFile();
             EConfigType loadType = (EConfigType)(comboFileType.SelectedIndex + 1);
             EConfigType saveType = (EConfigType)(comboTargetType.SelectedIndex + 1);
-            file.LoadFile(textFilePath.Text, loadType);
-            file.SaveFile(textTargetPath.Text, saveType);
+			if(file.LoadFile(textFilePath.Text, loadType) && file.SaveFile(textTargetPath.Text, saveType))
+				MessageBox.Show(this, "Parsing successful !", "执行数据转换");
+			else
+				MessageBox.Show(this, "Parsing failed !", "执行数据转换");
         }
     }
 }
